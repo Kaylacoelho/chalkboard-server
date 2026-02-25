@@ -48,7 +48,7 @@ const ESPN_URLS = {
 // ─── Data transformer ─────────────────────────────────────────────────────────
 // ESPN returns a lot of nested data we don't need.
 // This function pulls out only what ChalkBoard cares about.
-function transformGames(espnData) {
+function transformGames(espnData, sport) {
   const events = espnData.events ?? [];
 
   return events.map((event) => {
@@ -101,9 +101,37 @@ function transformGames(espnData) {
         }
       : null;
 
+    // Broadcasts (TV/streaming channels)
+    const broadcasts = (competition.broadcasts ?? [])
+      .flatMap(b => b.names ?? [])
+      .filter(Boolean);
+
+    // Play events: goals, cards, substitutions, etc.
+    const gameEvents = (competition.details ?? [])
+      .filter(d => d.type?.text)
+      .map(d => ({
+        type: d.type.text,
+        isHome: d.team?.id === homeComp.team.id,
+        player: d.athletesInvolved?.[0]?.displayName ?? null,
+        clock: d.clock?.displayValue ?? null,
+      }));
+
+    // Team-level statistics (populated for live/completed games)
+    const extractStats = (comp) => {
+      const raw = comp.statistics ?? [];
+      if (!raw.length) return null;
+      return raw.reduce((acc, s) => {
+        acc[s.name] = { label: s.abbreviation ?? s.name, value: s.displayValue };
+        return acc;
+      }, {});
+    };
+    const homeStats = extractStats(homeComp);
+    const awayStats = extractStats(awayComp);
+
     return {
       id: event.id,
       name: event.name,
+      sport,
       status,
       clock: competition.status.type.shortDetail ?? null,
       start_time: event.date,
@@ -123,10 +151,12 @@ function transformGames(espnData) {
         [homeAbbr]: parseInt(homeComp.score ?? 0),
         [awayAbbr]: parseInt(awayComp.score ?? 0),
       },
-      // Only include win_probability if we have data
       ...(win_probability && { win_probability }),
-      // Only include spread if we have data
       ...(spread && { spread }),
+      ...(broadcasts.length > 0 && { broadcasts }),
+      ...(gameEvents.length > 0 && { events: gameEvents }),
+      ...(homeStats && { homeStats }),
+      ...(awayStats && { awayStats }),
     };
   });
 }
@@ -151,7 +181,7 @@ app.get("/api/scores/:league", async (req, res) => {
     const response = await fetch(`${espnUrl}?dates=${yesterday}-${tomorrow}&limit=100`);
 
     const data = await response.json();
-    const games = transformGames(data);
+    const games = transformGames(data, league);
 
     // 200 = OK — send the transformed games back to the React app
     res.status(200).json({ league, games });
