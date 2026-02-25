@@ -18,6 +18,15 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 
+// Returns a date string in ESPN's required format: YYYYMMDD
+// offset = 0 means today, offset = -1 means yesterday
+function espnDate(offset = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+  // .slice(0,10) grabs "2026-02-25", .replace removes dashes → "20260225"
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -123,8 +132,10 @@ app.get("/api/scores/:league", async (req, res) => {
 
   try {
     // fetch() makes an HTTP request — just like in the browser, but on the server
-    const response = await fetch(espnUrl);
-
+// Fetch yesterday through today in one request using ESPN's date range format
+    const yesterday = espnDate(-1);
+    const today = espnDate(0);
+    const response = await fetch(`${espnUrl}?dates=${yesterday}-${today}&limit=100`);
     if (!response.ok) {
       throw new Error(`ESPN returned status ${response.status}`);
     }
