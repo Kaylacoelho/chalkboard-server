@@ -101,6 +101,7 @@ function transformGames(espnData) {
       id: event.id,
       name: event.name,
       status,
+      clock: competition.status.type.shortDetail ?? null,
       start_time: event.date,
       home: homeAbbr,
       away: awayAbbr,
