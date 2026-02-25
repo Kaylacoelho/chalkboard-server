@@ -143,11 +143,8 @@ app.get("/api/scores/:league", async (req, res) => {
     // fetch() makes an HTTP request — just like in the browser, but on the server
 // Fetch yesterday through today in one request using ESPN's date range format
     const yesterday = espnDate(-1);
-    const today = espnDate(0);
-    const response = await fetch(`${espnUrl}?dates=${yesterday}-${today}&limit=100`);
-    if (!response.ok) {
-      throw new Error(`ESPN returned status ${response.status}`);
-    }
+    const tomorrow = espnDate(1);
+    const response = await fetch(`${espnUrl}?dates=${yesterday}-${tomorrow}&limit=100`);
 
     const data = await response.json();
     const games = transformGames(data);
