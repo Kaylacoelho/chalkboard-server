@@ -68,6 +68,15 @@ function transformGames(espnData) {
     if (statusType === "STATUS_IN_PROGRESS") status = "in_progress";
     if (statusType === "STATUS_FINAL") status = "final";
     if (statusType === "STATUS_HALFTIME") status = "in_progress";
+    
+    // Safety net: if the game's start time is in the past but ESPN still
+    // says "scheduled", override it to "final". This catches stale data.
+    // Date.now() is the current time in milliseconds.
+    // new Date(event.date).getTime() converts the game's start time to milliseconds too,
+    // so we can compare them with a simple greater-than check.
+    if (status === "scheduled" && new Date(event.date).getTime() < Date.now()) {
+      status = "final";
+    }
 
     // Win probability — ESPN provides this in competition.situation or odds
     // It's not always present, so we fall back to undefined safely
