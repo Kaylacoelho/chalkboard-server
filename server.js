@@ -66,10 +66,14 @@ function transformGames(espnData) {
     const statusType = competition.status.type.name;
     let status = "scheduled";
     if (statusType === "STATUS_IN_PROGRESS") status = "in_progress";
-    if (statusType === "STATUS_FINAL") status = "final";
     if (statusType === "STATUS_HALFTIME") status = "in_progress";
-    
-    // Replace old safety net with new logic:
+    if (statusType === "STATUS_FINAL") status = "final";
+    if (statusType === "STATUS_FULL_TIME") status = "final";
+    if (statusType === "STATUS_FINAL_OVERTIME") status = "final";
+    if (statusType === "STATUS_FINAL_PENALTY") status = "final";
+    // Trust ESPN's completed flag as the authoritative source
+    if (competition.status.type.completed) status = "final";
+
     const GAME_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
     const startTime = new Date(event.date).getTime();
     if (status === "scheduled") {
