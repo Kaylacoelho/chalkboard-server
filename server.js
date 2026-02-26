@@ -38,20 +38,52 @@ app.use(cors());
 // Each key is the league name your React app will send in the URL.
 // Each value is the ESPN scoreboard URL for that league.
 const ESPN_URLS = {
-  nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-  nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
-  nhl: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
-  mls: "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard",
-  ucl: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
+  // Basketball
+  nba:        "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+  wnba:       "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard",
+  // Football
+  nfl:        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+  ncaaf:      "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
+  // Hockey
+  nhl:        "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+  // Baseball
+  mlb:        "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+  // Soccer
+  mls:        "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/scoreboard",
+  nwsl:       "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.nwsl/scoreboard",
+  ucl:        "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
+  uel:        "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.europa/scoreboard",
+  epl:        "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard",
+  laliga:     "https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard",
+  bundesliga: "https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard",
+  seriea:     "https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard",
+  ligue1:     "https://site.api.espn.com/apis/site/v2/sports/soccer/fra.1/scoreboard",
+  ligamx:     "https://site.api.espn.com/apis/site/v2/sports/soccer/mex.1/scoreboard",
 };
 
 // Maps our short league codes to ESPN's sport/league URL path segment
 const ESPN_SPORT_PATH = {
-  nba: "basketball/nba",
-  nfl: "football/nfl",
-  nhl: "hockey/nhl",
-  mls: "soccer/usa.1",
-  ucl: "soccer/uefa.champions",
+  // Basketball
+  nba:        "basketball/nba",
+  wnba:       "basketball/wnba",
+  // Football
+  nfl:        "football/nfl",
+  ncaaf:      "football/college-football",
+  // Hockey
+  nhl:        "hockey/nhl",
+  // Baseball
+  mlb:        "baseball/mlb",
+  // Soccer
+  mls:        "soccer/usa.1",
+  nwsl:       "soccer/usa.nwsl",
+  ucl:        "soccer/uefa.champions",
+  uel:        "soccer/uefa.europa",
+  epl:        "soccer/eng.1",
+  laliga:     "soccer/esp.1",
+  bundesliga: "soccer/ger.1",
+  seriea:     "soccer/ita.1",
+  ligue1:     "soccer/fra.1",
+  ligamx:     "soccer/mex.1",
 };
 
 // ─── Data transformer ─────────────────────────────────────────────────────────
