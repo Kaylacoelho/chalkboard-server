@@ -206,20 +206,27 @@ app.get("/api/scores/:league", async (req, res) => {
 });
 
 // ─── Route: GET /api/team/:sport/:teamId ──────────────────────────────────────
-// Returns team record + recent form for the side panel.
+// Returns team record, recent form, season stats, and roster for the side panel.
 // :sport = nba/nfl/nhl/mls/ucl   :teamId = ESPN team ID (from game data)
 app.get("/api/team/:sport/:teamId", async (req, res) => {
   const { sport, teamId } = req.params;
   const sportPath = ESPN_SPORT_PATH[sport];
   if (!sportPath) return res.status(400).json({ error: `Unknown sport: ${sport}` });
 
+  const base = `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamId}`;
+
   try {
-    const [teamRes, schedRes] = await Promise.all([
-      fetch(`https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamId}`),
-      fetch(`https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamId}/schedule`),
+    // Fetch all four endpoints in parallel; statistics/roster are best-effort
+    const [teamRes, schedRes, statsRes, rosterRes] = await Promise.all([
+      fetch(base),
+      fetch(`${base}/schedule`),
+      fetch(`${base}/statistics`).catch(() => null),
+      fetch(`${base}/roster`).catch(() => null),
     ]);
-    const teamData = await teamRes.json();
-    const schedData = await schedRes.json();
+    const teamData   = await teamRes.json();
+    const schedData  = await schedRes.json();
+    const statsData  = statsRes  ? await statsRes.json().catch(() => ({}))  : {};
+    const rosterData = rosterRes ? await rosterRes.json().catch(() => ({})) : {};
 
     const team = teamData.team ?? {};
 
@@ -231,12 +238,12 @@ app.get("/api/team/:sport/:teamId", async (req, res) => {
     const ties   = mainRecord?.stats?.find(s => s.name === "ties")?.value;
     const summary = mainRecord?.summary ?? `${wins}-${losses}`;
 
-    // Recent games — take last 5 completed from schedule, newest first
+    // Recent games — take last 8 completed from schedule, newest first
     const events = schedData.events ?? [];
     const completedGames = events
       .filter(e => e.competitions?.[0]?.status?.type?.completed)
       .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 5);
+      .slice(0, 8);
 
     const recentGames = completedGames.map(e => {
       const comp  = e.competitions[0];
@@ -271,18 +278,69 @@ app.get("/api/team/:sport/:teamId", async (req, res) => {
     const bestGame  = withMargin.length ? withMargin.reduce((a, b) => b.margin > a.margin ? b : a) : null;
     const worstGame = withMargin.length ? withMargin.reduce((a, b) => b.margin < a.margin ? b : a) : null;
 
+    // Season statistics — ESPN nests stats in results.stats.categories (varies by sport)
+    let seasonStats = null;
+    const statsCategories =
+      statsData.results?.stats?.categories ??
+      statsData.stats?.categories ??
+      statsData.statistics?.splits?.categories ??
+      [];
+    if (statsCategories.length > 0) {
+      seasonStats = {};
+      for (const cat of statsCategories) {
+        for (const stat of (cat.stats ?? [])) {
+          if (stat.name && stat.displayValue) {
+            seasonStats[stat.name] = {
+              label:    stat.abbreviation ?? stat.name,
+              value:    stat.displayValue,
+              category: cat.name ?? null,
+            };
+          }
+        }
+      }
+      if (Object.keys(seasonStats).length === 0) seasonStats = null;
+    }
+
+    // Roster — ESPN's shape varies: flat athletes[], roster.entries[], or grouped
+    let allAthletes = [];
+    if (Array.isArray(rosterData.athletes) && rosterData.athletes.length > 0) {
+      // Could be flat or grouped by position
+      const first = rosterData.athletes[0];
+      if (first?.items) {
+        allAthletes = rosterData.athletes.flatMap(g => g.items ?? []);
+      } else {
+        allAthletes = rosterData.athletes;
+      }
+    } else if (Array.isArray(rosterData.roster?.entries)) {
+      allAthletes = rosterData.roster.entries;
+    } else if (Array.isArray(rosterData.roster?.athletes)) {
+      allAthletes = rosterData.roster.athletes;
+    }
+
+    const topPlayers = allAthletes.slice(0, 20).map(entry => {
+      const a = entry.athlete ?? entry; // handle both {athlete:{...}} and flat shapes
+      return {
+        name:     a.displayName ?? a.fullName ?? null,
+        jersey:   a.jersey ?? entry.jerseyNumber ?? null,
+        position: a.position?.abbreviation ?? a.position?.name ?? null,
+        headshot: a.headshot?.href ?? null,
+      };
+    }).filter(p => p.name);
+
     res.json({
-      id:          team.id,
-      name:        team.displayName,
-      nickname:    team.nickname,
+      id:           team.id,
+      name:         team.displayName,
+      nickname:     team.nickname,
       abbreviation: team.abbreviation,
-      logo:        team.logos?.[0]?.href,
-      color:       team.color,
-      record:      { wins, losses, ...(ties != null && { ties }), summary },
+      logo:         team.logos?.[0]?.href,
+      color:        team.color,
+      record:       { wins, losses, ...(ties != null && { ties }), summary },
       recentGames,
-      streak:      streakCount >= 2 ? { type: streakType, count: streakCount } : null,
+      streak:       streakCount >= 2 ? { type: streakType, count: streakCount } : null,
       bestGame,
       worstGame,
+      seasonStats,
+      topPlayers:   topPlayers.length > 0 ? topPlayers : null,
     });
   } catch (err) {
     console.error(`[team/${sport}/${teamId}] error:`, err.message);
