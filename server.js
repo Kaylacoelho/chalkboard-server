@@ -252,8 +252,10 @@ app.get("/api/team/:sport/:teamId", async (req, res) => {
       const mine   = comps.find(c => String(c.team?.id) === String(teamId)) ?? comps[0];
       const theirs = comps.find(c => c !== mine) ?? comps[1];
       if (!mine || !theirs) return null;
-      const myScore    = parseInt(mine.score   ?? 0);
-      const theirScore = parseInt(theirs.score ?? 0);
+      // Use null when score is missing/empty so the UI can distinguish 0 from "no data"
+      const parseScore = (s) => (s != null && s !== "") ? Number.parseInt(s) : null;
+      const myScore    = parseScore(mine.score);
+      const theirScore = parseScore(theirs.score);
       const result = mine.winner ? "W" : theirs.winner ? "L" : "D";
       return {
         date:      e.date,
