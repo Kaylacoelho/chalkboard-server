@@ -45,6 +45,15 @@ const ESPN_URLS = {
   ucl: "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard",
 };
 
+// Maps our short league codes to ESPN's sport/league URL path segment
+const ESPN_SPORT_PATH = {
+  nba: "basketball/nba",
+  nfl: "football/nfl",
+  nhl: "hockey/nhl",
+  mls: "soccer/usa.1",
+  ucl: "soccer/uefa.champions",
+};
+
 // ─── Data transformer ─────────────────────────────────────────────────────────
 // ESPN returns a lot of nested data we don't need.
 // This function pulls out only what ChalkBoard cares about.
@@ -139,10 +148,12 @@ function transformGames(espnData, sport) {
       away: awayAbbr,
       teams: {
         [homeAbbr]: {
+          id: homeComp.team.id,
           name: homeComp.team.displayName,
           logo: homeComp.team.logo,
         },
         [awayAbbr]: {
+          id: awayComp.team.id,
           name: awayComp.team.displayName,
           logo: awayComp.team.logo,
         },
@@ -191,6 +202,91 @@ app.get("/api/scores/:league", async (req, res) => {
     res
       .status(500)
       .json({ error: "Failed to fetch scores", detail: err.message });
+  }
+});
+
+// ─── Route: GET /api/team/:sport/:teamId ──────────────────────────────────────
+// Returns team record + recent form for the side panel.
+// :sport = nba/nfl/nhl/mls/ucl   :teamId = ESPN team ID (from game data)
+app.get("/api/team/:sport/:teamId", async (req, res) => {
+  const { sport, teamId } = req.params;
+  const sportPath = ESPN_SPORT_PATH[sport];
+  if (!sportPath) return res.status(400).json({ error: `Unknown sport: ${sport}` });
+
+  try {
+    const [teamRes, schedRes] = await Promise.all([
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamId}`),
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamId}/schedule`),
+    ]);
+    const teamData = await teamRes.json();
+    const schedData = await schedRes.json();
+
+    const team = teamData.team ?? {};
+
+    // Season record — ESPN nests it under record.items; "total" is the overall row
+    const recordItems = team.record?.items ?? [];
+    const mainRecord = recordItems.find(r => r.type === "total") ?? recordItems[0];
+    const wins   = mainRecord?.stats?.find(s => s.name === "wins")?.value   ?? 0;
+    const losses = mainRecord?.stats?.find(s => s.name === "losses")?.value ?? 0;
+    const ties   = mainRecord?.stats?.find(s => s.name === "ties")?.value;
+    const summary = mainRecord?.summary ?? `${wins}-${losses}`;
+
+    // Recent games — take last 5 completed from schedule, newest first
+    const events = schedData.events ?? [];
+    const completedGames = events
+      .filter(e => e.competitions?.[0]?.status?.type?.completed)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5);
+
+    const recentGames = completedGames.map(e => {
+      const comp  = e.competitions[0];
+      const comps = comp.competitors;
+      // Match this team by ESPN id (use String() so "13" === "13" regardless of source type)
+      const mine   = comps.find(c => String(c.team?.id) === String(teamId)) ?? comps[0];
+      const theirs = comps.find(c => c !== mine) ?? comps[1];
+      if (!mine || !theirs) return null;
+      const myScore    = parseInt(mine.score   ?? 0);
+      const theirScore = parseInt(theirs.score ?? 0);
+      const result = mine.winner ? "W" : theirs.winner ? "L" : "D";
+      return {
+        date:      e.date,
+        opponent:  theirs.team?.abbreviation ?? theirs.team?.displayName ?? "?",
+        result,
+        teamScore: myScore,
+        oppScore:  theirScore,
+        isHome:    mine.homeAway === "home",
+      };
+    }).filter(Boolean);
+
+    // Current streak (consecutive W/L/D from the most recent game)
+    let streakType = null, streakCount = 0;
+    for (const g of recentGames) {
+      if (!streakType) { streakType = g.result; streakCount = 1; }
+      else if (g.result === streakType) streakCount++;
+      else break;
+    }
+
+    // Best win / worst loss among recent games (by margin)
+    const withMargin = recentGames.map(g => ({ ...g, margin: g.teamScore - g.oppScore }));
+    const bestGame  = withMargin.length ? withMargin.reduce((a, b) => b.margin > a.margin ? b : a) : null;
+    const worstGame = withMargin.length ? withMargin.reduce((a, b) => b.margin < a.margin ? b : a) : null;
+
+    res.json({
+      id:          team.id,
+      name:        team.displayName,
+      nickname:    team.nickname,
+      abbreviation: team.abbreviation,
+      logo:        team.logos?.[0]?.href,
+      color:       team.color,
+      record:      { wins, losses, ...(ties != null && { ties }), summary },
+      recentGames,
+      streak:      streakCount >= 2 ? { type: streakType, count: streakCount } : null,
+      bestGame,
+      worstGame,
+    });
+  } catch (err) {
+    console.error(`[team/${sport}/${teamId}] error:`, err.message);
+    res.status(500).json({ error: "Failed to fetch team data" });
   }
 });
 
