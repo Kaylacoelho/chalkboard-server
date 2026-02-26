@@ -151,11 +151,13 @@ function transformGames(espnData, sport) {
           id: homeComp.team.id,
           name: homeComp.team.displayName,
           logo: homeComp.team.logo,
+          color: homeComp.team.color ?? null,
         },
         [awayAbbr]: {
           id: awayComp.team.id,
           name: awayComp.team.displayName,
           logo: awayComp.team.logo,
+          color: awayComp.team.color ?? null,
         },
       },
       score: {
